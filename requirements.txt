@@ -1,0 +1,2 @@
+pymupdf==1.23.26
+requests==2.31.0

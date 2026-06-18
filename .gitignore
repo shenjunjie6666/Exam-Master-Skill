@@ -1,0 +1,11 @@
+# 敏感配置文件（放API Key的地方）
+config.json
+
+# 本地测试用的课件和生成的笔记
+*.pdf
+*.md
+!README.md
+
+# Python 缓存
+__pycache__/
+.venv/
