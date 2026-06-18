@@ -1,105 +1,99 @@
-# Exam-Master-Skill
+# 🚀 Exam-Master-Skill
 
-期末划重点神器：从课件 PDF 生成结构化复习笔记 + 模拟考题 + 速查表 + Anki 闪卡。
+> **“别手敲笔记了！让 AI 帮你从乱糟糟的课件中捞出考点。”**
 
-## 安装
+**Exam-Master-Skill** 是一套专为大学生设计的“期末通关”自动化工具。它不只是简单的转码工具，而是通过**视觉特征识别 + 智能降噪 + 闭环逻辑自测**，将密密麻麻、重点模糊的课件 PDF，转化为学霸级复习笔记。
+
+---
+
+## 🎨 视觉预览
+
+
+---
+
+## ✨ 核心亮点：为什么你需要它？
+
+* **视觉重构**：自动解析课件中的**标红重点**、加粗文字和标题层级，让 AI 精准定位你的“必考点”。
+* **语义降噪**：内置废话过滤算法，自动过滤“如图所示”、“请大家看这里”等无效口水话，让 AI 全力挖掘知识点。
+* **考点矩阵化**：告别大段文字，强制 AI 输出结构化【考点矩阵表】，涵盖【考频指数】、【命题陷阱】、【关联逻辑】。
+* **闭环自测**：自动生成 3 道高难度模拟题，并进行“反向盲区回填”——AI 发现你没掌握的考点，自动补充进笔记。
+* **一键全能交付**：不仅有 PDF 笔记，还支持生成：
+    * 📄 **A4 考前速查表** (适合进考场前 10 分钟突击)
+    * 📇 **Anki 闪卡导入包** (直接导入 Anki 进行科学背诵)
+
+---
+
+## 🛠️ 快速安装
 
 ```bash
+# 1. 克隆项目
+git clone [https://github.com/yourname/Exam-Master-Skill.git](https://github.com/yourname/Exam-Master-Skill.git)
+cd Exam-Master-Skill
+
+# 2. 安装依赖
 pip install -r requirements.txt
-brew install pango cairo gdk-pixbuf  # macOS weasyprint 依赖
+
+# 3. macOS 额外配置
+brew install pango cairo gdk-pixbuf
+
 ```
 
-## 使用
+---
 
-```bash
-# 单文件
-python app.py 课件.pdf
+## 🚀 一键通关
 
-# 多文件 / 整个目录
-python app.py ch1.pdf ch2.pdf ch3.pdf
-python app.py ~/课件目录/
+在终端运行以下命令，即可开启你的复习辅助模式：
 
-# 指定学科 + 输出名 + 全部可选输出
-python app.py 课件.pdf \
-  -o 操作系统复习 \
-  --discipline stem \
-  --cheat-sheet \
-  --anki \
-  --keep-md
+| 模式 | 运行命令 |
+| --- | --- |
+| **基础模式** | `python app.py lecture.pdf` |
+| **全量通关模式** | `python app.py lecture.pdf -o 期末必过 --cheat-sheet --apkg --keep-md` |
+| **多目录批量** | `python app.py ~/Documents/semester_finals/` |
 
-# 跳过缓存（强制重新处理）
-python app.py 课件.pdf --no-cache
+---
+
+## 📊 学科专属模板
+
+针对不同课程特性，框架内置了不同思维导图模板：
+
+* **STEM (理工)**：公式推导链 + 定理边界条件 + 典型题型
+* **Medical (医学)**：机制 → 症状 → 诊断 → 治疗四维闭环
+* **Liberal-Arts (文科)**：时间轴 + 因果链 + 学派对比表
+* **Business (商科)**：模型框架 + 适用场景 + 局限性
+
+---
+
+## 🏗️ 它是如何工作的？
+
+```mermaid
+graph LR
+    A[课件 PDF] --> B(视觉解析层)
+    B --> C(NLP 提炼层)
+    C --> D(DeepSeek 推理层)
+    D --> E(闭环自测层)
+    E --> F[PDF/Anki/速查表]
+
 ```
 
-## 参数
+1. **解析层**：提取 PDF 字号、红字 RGB 值、矢量图骨架。
+2. **提炼层**：通过 TextRank 抽取关键句，TF-IDF 权重加持，确保 AI 抓准核心。
+3. **推理层**：驱动 DeepSeek 按照学科模板重构知识点。
+4. **自测层**：R1 模型出题 -> 对比笔记盲区 -> 精准补充。
 
-| 参数 | 说明 |
-|---|---|
-| `pdf` | PDF 文件路径（支持多个/glob/目录） |
-| `-o, --output` | 输出文件名前缀（默认：复习笔记） |
-| `--discipline` | 学科：`stem` `liberal-arts` `medical` `business` `general` |
-| `--cheat-sheet` | 生成一页考前速查表 |
-| `--anki` | 导出 Anki 闪卡 CSV |
-| `--keep-md` | 保留 Markdown 源文件 |
-| `--no-mock` | 跳过模拟考题 |
-| `--no-blind-spot` | 跳过盲区回填 |
-| `--no-cache` | 跳过缓存 |
+---
 
-## 学科模板
+## 💡 配置说明
 
-| 参数 | 输出侧重 |
-|---|---|
-| `stem` | 公式推导链、定理边界条件、典型题型 |
-| `liberal-arts` | 时间轴、因果链、学派对比表 |
-| `medical` | 机制→症状→诊断→治疗四维 |
-| `business` | 模型框架、适用场景、局限性 |
-| `general` | 考点矩阵，自动适应 |
-
-## 功能矩阵
-
-| 功能 | 说明 |
-|---|---|
-| TextRank 预摘要 | 本地抽取 35% 关键句，AI 在精选原料上加工 |
-| 字号层级识别 | 两遍扫描，自动检测 h1/h2/h3 标题 |
-| 红色文字捕捉 | 亮红/暗红/橙红/粉红四档 RGB 阈值 |
-| 表格提取 | PyMuPDF 自动识别并转 Markdown 表格 |
-| 图片上下文 | 基于坐标提取插图周围文本块 |
-| TF-IDF 关键词 | 本地提取高频词，引导 AI 覆盖核心概念 |
-| 数学公式保留 | 检测 LaTeX/数学符号区域 |
-| 盲区回填 | 出题→反查→补充笔记缺漏（闭环） |
-| 缓存断点续传 | PDF 指纹 + 配置哈希，阶段级缓存 |
-| 多文件批处理 | 支持多 PDF / glob / 目录输入 |
-| 多格式输出 | PDF + Markdown 源文件 + Anki CSV |
-| 考前速查表 | 浓缩一页 A4 |
-| 视觉模型（可选） | 配置后自动分析插图 |
-
-## 输出
-
-| 文件 | 内容 |
-|---|---|
-| `复习笔记.pdf` | 考点矩阵、红字边框、表格、盲区补充 |
-| `复习笔记.md` | Markdown 源文件（需 `--keep-md`） |
-| `复习笔记-模拟考题.pdf` | 3 道高难度考题 + 解析 |
-| `复习笔记-速查表.pdf` | 一页 A4 考前速查（需 `--cheat-sheet`） |
-| `复习笔记-anki.csv` | Anki 可导入闪卡（需 `--anki`） |
-
-## 配置
+在根目录创建 `config.json`：
 
 ```json
 {
-  "DEEPSEEK_API_KEY": "sk-xxxx",
-  "API_URL": "https://api.deepseek.com/v1",
-  "VISION_API_KEY": "sk-xxxx (可选)",
-  "VISION_API_URL": "https://api.openai.com/v1/chat/completions (可选)",
-  "VISION_MODEL": "gpt-4o (可选)"
+  "DEEPSEEK_API_KEY": "sk-your-key",
+  "API_URL": "[https://api.deepseek.com/v1](https://api.deepseek.com/v1)"
 }
-```
-
-## 工作流
 
 ```
-多PDF合并 → 字号层级 → 红字/加粗标记 → 表格提取 → 图片坐标上下文
-  → TextRank 关键句抽取 → TF-IDF 关键词 → DeepSeek 学科模板生成笔记
-  → DeepSeek-R1 出题 → 盲区对比回填 → weasyprint PDF 导出
-  → (可选) 视觉模型插图分析 → (可选) 速查表 → (可选) Anki 闪卡
-```
+
+---
+
+*“在考试面前，效率就是胜率。祝你期末 All Pass!”*
