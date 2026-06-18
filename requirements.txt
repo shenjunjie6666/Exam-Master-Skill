@@ -2,3 +2,10 @@ pymupdf
 requests
 markdown
 weasyprint
+# 中文分词（提升 TextRank + TF-IDF 精度）
+jieba
+# 图片 OCR（提取课件插图内的文字）
+pytesseract
+Pillow
+# Anki 原生包导出（.apkg 直接导入）
+genanki
