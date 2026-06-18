@@ -45,7 +45,7 @@ DISCIPLINE_PROMPTS = {
     "stem": """## Role: 理工科期末复习导师
 
 ## 你的任务
-将课件转化为【公式推导链 + 定理边界条件 + 典型题型】三层笔记。
+将课件转化为【公式推导链 + 定理边界条件 + 典型题型 + Mermaid逻辑图】四层笔记。
 
 ## Rules:
 - 每个公式必须标注：适用条件、各符号含义、单位/量纲
@@ -54,8 +54,25 @@ DISCIPLINE_PROMPTS = {
 - 至少列出 3 个"看似正确实则错误的典型理解"
 - 重复概念打 🔥高频必考
 
+## 关键输出要求：Mermaid 逻辑图
+对于以下场景，必须输出 Mermaid 代码块（```mermaid ... ```）：
+1. 多步骤推导过程 → flowchart TD（自上而下流程图）
+2. 概念分类与层级关系 → graph TD（树形分类图）
+3. 对比关系 → graph LR（左右对比图）
+4. 状态转换 → stateDiagram-v2（状态机图）
+每个 Mermaid 图必须附带一句话说明，节点文字使用中文。
+
 ## 输出格式:
 | 公式/定理 | 适用条件 | 考试题型 | 易错点 |
+
+## Mermaid 示例:
+```mermaid
+flowchart TD
+    A[已知条件] --> B[应用定理X]
+    B --> C{判断边界}
+    C -->|满足| D[结论Y]
+    C -->|不满足| E[需修正]
+```
 """,
 
     "liberal-arts": """## Role: 文科期末复习导师
@@ -287,33 +304,69 @@ def _extract_image_contexts_rich(page, page_num):
 
             context_parts = []
 
-            # ---- 1. 标题检测 ----
-            caption = _extract_caption(page_text)
-            if caption:
-                context_parts.append(f"标题: {caption}")
-            else:
-                # 从图片周围的文本块检测
-                above_texts = []
-                below_texts = []
-                for block in text_blocks:
-                    if block[6] == 0:
-                        block_y = (block[1] + block[3]) / 2
-                        if abs(block[0] - img_rect.x0) < 250:
-                            if block_y < img_rect.y0 and img_rect.y0 - block_y < 180:
-                                above_texts.append(block[4].strip())
-                            elif block_y > img_rect.y1 and block_y - img_rect.y1 < 180:
-                                below_texts.append(block[4].strip())
+            # ---- 1. 加权关联文本块 ----
+            img_cx = (img_rect.x0 + img_rect.x1) / 2
+            img_cy = (img_rect.y0 + img_rect.y1) / 2
+            img_area = max(w * h, 1)
 
-                if above_texts:
-                    context_parts.append("上文: " + " ".join(above_texts[-2:]))
-                if below_texts:
-                    caption_candidate = " ".join(below_texts[:2])
-                    # 再检查下方文字是否为标题格式
-                    detected = _extract_caption(caption_candidate)
-                    if detected:
-                        context_parts.append(f"标题: {detected}")
-                    else:
-                        context_parts.append("下文: " + caption_candidate[:120])
+            scored_blocks = []
+            for block in text_blocks:
+                if block[6] != 0:
+                    continue
+                bx0, by0, bx1, by1 = block[0], block[1], block[2], block[3]
+                block_cx = (bx0 + bx1) / 2
+                block_cy = (by0 + by1) / 2
+                block_text = block[4].strip()
+                if len(block_text) < 2:
+                    continue
+
+                # 水平重叠度
+                h_overlap = max(0, min(img_rect.x1, bx1) - max(img_rect.x0, bx0))
+                h_overlap_ratio = h_overlap / max(bx1 - bx0, 1)
+
+                # 欧氏距离（归一化到图片对角线）
+                dist = math.sqrt(
+                    (block_cx - img_cx) ** 2 + (block_cy - img_cy) ** 2
+                )
+                diag = math.sqrt(img_area)
+                dist_norm = dist / max(diag, 1)
+
+                # 方向权重：下方文字（caption）权重最高
+                if block_cy > img_rect.y1 and block_cy - img_rect.y1 < diag * 1.5:
+                    direction_weight = 2.0  # 下方最近：最可能是标题
+                elif block_cy < img_rect.y0 and img_rect.y0 - block_cy < diag * 1.2:
+                    direction_weight = 1.2  # 上方：次可能
+                else:
+                    direction_weight = 0.3  # 远离：低权重
+
+                # 综合得分 = 水平重叠 × 方向权重 / (1 + 距离)
+                score = h_overlap_ratio * direction_weight / (1 + dist_norm)
+                if score > 0.05:
+                    scored_blocks.append((score, block_text, block_cy))
+
+            # 按得分排序
+            scored_blocks.sort(key=lambda x: x[0], reverse=True)
+
+            # 分类上方/下方文本（加权版）
+            above_scored = [(s, t) for s, t, y in scored_blocks if y < img_rect.y0]
+            below_scored = [(s, t) for s, t, y in scored_blocks if y > img_rect.y1]
+
+            if below_scored:
+                # 下方得分最高的文本 = 最可能的标题
+                best_below = below_scored[0]
+                caption = _extract_caption(best_below[1])
+                if caption:
+                    context_parts.append(f"标题: {caption}")
+                else:
+                    context_parts.append(f"疑似标题({best_below[0]:.2f}): {best_below[1][:120]}")
+                # 额外的下方文本
+                if len(below_scored) > 1:
+                    extra = " | ".join(t for _, t in below_scored[1:3])
+                    context_parts.append(f"下文: {extra[:150]}")
+
+            if above_scored:
+                top_above = " | ".join(t for _, t in above_scored[:2])
+                context_parts.append(f"上文: {top_above[:150]}")
 
             # ---- 2. OCR（可选） ----
             if img_bytes:
@@ -502,6 +555,72 @@ def auto_detect_discipline(text):
 
 
 # ============================================================
+# 乱码检测
+# ============================================================
+def _detect_garbled_text(text):
+    """检测文本质量：高熵/大量替换字符 → 乱码"""
+    if not text or len(text) < 100:
+        return False, 0.0
+
+    # 1. Unicode 替换字符 (U+FFFD) 计数
+    replacement_count = text.count("�")
+
+    # 2. 控制字符比例
+    control_chars = sum(1 for c in text if ord(c) < 32 and c not in "\n\r\t")
+
+    # 3. 连续非中英文字符段
+    weird_runs = re.findall(r"[^一-鿿 -~\n\r\t]{3,}", text)
+
+    # 4. 中文字符比例（正常中文 PDF 应有较高比例）
+    total_chars = len(text)
+    cjk_chars = sum(1 for c in text if "一" <= c <= "鿿")
+    cjk_ratio = cjk_chars / max(total_chars, 1)
+
+    # 综合判断
+    garbled_score = 0.0
+    garbled_score += (replacement_count / max(total_chars, 1)) * 3.0
+    garbled_score += (control_chars / max(total_chars, 1)) * 2.0
+    garbled_score += (len(weird_runs) / max(total_chars / 10, 1)) * 2.0
+    # 如果文本看起来是中文但 CJK 比例极低
+    if cjk_ratio < 0.02 and replacement_count > 5:
+        garbled_score += 0.5
+
+    is_garbled = garbled_score > 0.15 or replacement_count > total_chars * 0.05
+    return is_garbled, min(garbled_score, 1.0)
+
+
+def _extract_pdf_via_ocr(doc):
+    """全页面 OCR 回退模式"""
+    full_text = []
+    total_pages = len(doc)
+    print(f"   → OCR 处理 {total_pages} 页...")
+
+    for page_num in range(total_pages):
+        page = doc[page_num]
+        # 渲染页面为图像
+        pix = page.get_pixmap(dpi=200)
+        img = PILImage.open(io.BytesIO(pix.tobytes("png")))
+        ocr_text = pytesseract.image_to_string(img, lang="chi_sim+eng")
+
+        page_text = f"--- Page {page_num + 1} ---\n{ocr_text}"
+
+        # OCR 后也尝试提取表格（表格在 OCR 中可能丢失结构）
+        tables = page.find_tables()
+        if tables:
+            page_text += "\n[提取表格]\n"
+            for table in tables:
+                md_table = _table_to_markdown(table)
+                if md_table:
+                    page_text += md_table + "\n"
+
+        full_text.append(page_text)
+        if (page_num + 1) % 10 == 0:
+            print(f"   → OCR 进度: {page_num + 1}/{total_pages}")
+
+    return "\n".join(full_text)
+
+
+# ============================================================
 # PDF 解析
 # ============================================================
 def extract_pdf_with_features(pdf_path):
@@ -515,6 +634,21 @@ def extract_pdf_with_features(pdf_path):
     sizes = _collect_font_sizes(doc)
     h1_th, h2_th, h3_th = _build_size_thresholds(sizes)
     print(f"   → 字号阈值: h1≥{h1_th:.0f}pt  h2≥{h2_th:.0f}pt  h3≥{h3_th:.0f}pt")
+
+    # ---- 乱码检测：快速采样判断文本质量 ----
+    sample_text = ""
+    for page in doc:
+        sample_text += page.get_text("text")
+        if len(sample_text) > 3000:
+            break
+    is_garbled, garbled_ratio = _detect_garbled_text(sample_text)
+    if is_garbled:
+        print(f"   ⚠️  检测到文本质量异常（乱码率 {garbled_ratio:.0%}），切换至 OCR 模式...")
+        if not HAS_OCR:
+            print("   ❌ OCR 模式需要 pytesseract，请安装: pip install pytesseract Pillow")
+            print("   → 继续使用文本提取（结果可能包含乱码）")
+        else:
+            return _extract_pdf_via_ocr(doc)
 
     full_text = []
     for page_num in range(len(doc)):
@@ -781,6 +915,46 @@ def cache_set(data, cache_path):
 # ============================================================
 # API 调用
 # ============================================================
+import time as _time
+
+
+def _retry_with_backoff(max_retries=3, base_delay=2.0, max_delay=30.0):
+    """指数退避重试装饰器：2s → 4s → 8s，带抖动"""
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except requests.exceptions.Timeout:
+                    last_exception = "timeout"
+                    if attempt < max_retries:
+                        delay = min(base_delay * (2 ** attempt), max_delay)
+                        delay *= 0.75 + _time.time() % 1 * 0.5  # 抖动 ±25%
+                        print(f"\n⏳ 请求超时，{delay:.1f}s 后重试 (第 {attempt+1}/{max_retries} 次)...")
+                        _time.sleep(delay)
+                except requests.exceptions.RequestException as e:
+                    last_exception = e
+                    if attempt < max_retries:
+                        delay = min(base_delay * (2 ** attempt), max_delay)
+                        delay *= 0.75 + _time.time() % 1 * 0.5
+                        print(f"\n⏳ 网络异常，{delay:.1f}s 后重试 (第 {attempt+1}/{max_retries} 次)...")
+                        _time.sleep(delay)
+                except (KeyError, json.JSONDecodeError) as e:
+                    # JSON 解析错误不重试——这是 API 返回格式问题，重试无意义
+                    print(f"\n❌ API 返回格式异常: {e}")
+                    sys.exit(1)
+            # 所有重试耗尽
+            if last_exception == "timeout":
+                timeout_val = kwargs.get("timeout", "?")
+                print(f"\n❌ API 请求反复超时（已重试 {max_retries} 次），请检查网络")
+            else:
+                print(f"\n❌ API 请求反复失败（已重试 {max_retries} 次）: {last_exception}")
+            sys.exit(1)
+        return wrapper
+    return decorator
+
+
 def _build_headers(config):
     return {
         "Authorization": f"Bearer {config['DEEPSEEK_API_KEY']}",
@@ -788,31 +962,22 @@ def _build_headers(config):
     }
 
 
+@_retry_with_backoff(max_retries=3, base_delay=2.0)
 def _api_post(config, payload, timeout=120, stream=False):
-    """统一 API 调用，支持流式输出"""
-    payload = dict(payload)  # 不修改原始 payload
+    """统一 API 调用，支持流式输出，自动指数退避重试"""
+    payload = dict(payload)
     payload["stream"] = stream
 
-    try:
-        if stream:
-            return _api_post_stream(config, payload, timeout)
-        response = requests.post(
-            config["API_URL"] + "/chat/completions",
-            json=payload,
-            headers=_build_headers(config),
-            timeout=timeout,
-        )
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
-    except requests.exceptions.Timeout:
-        print(f"\n❌ API 请求超时（{timeout}s），请检查网络或稍后重试")
-        sys.exit(1)
-    except requests.exceptions.RequestException as e:
-        print(f"\n❌ API 请求失败: {e}")
-        sys.exit(1)
-    except (KeyError, json.JSONDecodeError) as e:
-        print(f"\n❌ API 返回格式异常: {e}")
-        sys.exit(1)
+    if stream:
+        return _api_post_stream(config, payload, timeout)
+    response = requests.post(
+        config["API_URL"] + "/chat/completions",
+        json=payload,
+        headers=_build_headers(config),
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"]
 
 
 def _api_post_stream(config, payload, timeout):
