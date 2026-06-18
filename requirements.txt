@@ -1,2 +1,4 @@
 pymupdf==1.23.26
 requests==2.31.0
+markdown==3.6
+weasyprint==61.2

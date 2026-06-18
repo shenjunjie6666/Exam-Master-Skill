@@ -1,14 +1,6 @@
-# 敏感配置文件（放API Key的地方）
 config.json
-
-# 本地测试用的课件和生成的笔记
 *.pdf
-*.md
-!README.md
-
-# macOS
-.DS_Store
-
-# Python 缓存
+复习笔记.md
 __pycache__/
 .venv/
+.DS_Store
